@@ -35,8 +35,3 @@ O modelo é composto por 6 entidades principais, organizadas em 3 camadas:
 
 - **`lojavirtual_ddl.sql`** — Script SQL com os comandos DDL (`CREATE TABLE`) para criação de todas as tabelas do banco, incluindo chaves primárias, chaves estrangeiras e restrições de integridade.
 - **`lojavirtual.mwb`** — Arquivo de modelagem do MySQL Workbench, contendo o diagrama Entidade-Relacionamento (EER) do banco de dados.
-
-## Como Usar
-
-1. Abra o arquivo `lojavirtual.mwb` no MySQL Workbench para visualizar o diagrama completo do banco.
-2. Execute o script `lojavirtual_ddl.sql` em uma conexão MySQL para criar o banco de dados `LojaVirtual` e todas as suas tabelas.
