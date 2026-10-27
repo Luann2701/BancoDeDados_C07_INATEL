@@ -1,0 +1,186 @@
+  INSERT  - cria novos registros
+  UPDATE  - altera registros existentes
+  DELETE  - remove registros
+
+
+---------------------------------------------------------------------
+1. INSERT 
+---------------------------------------------------------------------
+Comando: INSERT INTO <tabela> (colunas) VALUES (...), (...);
+
+Motivo: popular o banco com no mínimo 5 registros por tabela, para
+que os demais comandos e consultas tenham dados para operar.
+
+Pontos técnicos:
+- A ordem dos inserts respeita as chaves estrangeiras. Uma tabela
+  referenciada precisa ter os dados ANTES da tabela que a referencia:
+    Pessoa -> Cliente e Funcionário
+    Categoria -> Produto
+    Cliente + Produto -> Pedido -> Item_Pedido
+- Em Categoria, as categorias raiz (id_categoria_pai NULL) são
+  inseridas antes das subcategorias, porque a FK e recursiva.
+- Em Item_Pedido, o preço e gravado em preco_unitario_praticado, o
+  que preserva o histórico do preço no momento da compra.
+- O valor_total dos pedidos entra como 0 e é calculado no item 2.
+
+
+---------------------------------------------------------------------
+2. UPDATE COM SUBQUERY - CALCULAR valor_total (3.1)
+---------------------------------------------------------------------
+Comando: UPDATE Pedido SET valor_total = (SELECT SUM(quantidade *
+         preco_unitario_praticado) FROM Item_Pedido ...)
+
+Motivo: valor_total é um dado DERIVADO, ou seja, resulta da soma dos
+itens do pedido. Calcular via SQL evita digitação manual e garante
+que o total seja igual a soma dos itens.
+
+Observacao: como esse campo duplica uma informação que já existe em
+Item_Pedido, ele precisa ser atualizado sempre que os itens mudarem.
+A consulta de conferência no final do script (esperado: 0 linhas)
+detecta qualquer divergência.
+
+
+---------------------------------------------------------------------
+3. INSERT EM TRANSAÇÃO - NOVO PEDIDO COMPLETO (3.2)
+---------------------------------------------------------------------
+Comandos: START TRANSACTION; INSERT em Pedido; INSERT em
+          Item_Pedido; UPDATE em Produto; UPDATE em Pedido; COMMIT;
+
+Motivo: registrar um pedido envolve várias escritas que dependem
+umas das outras:
+  1) criar o pedido;
+  2) criar os itens;
+  3) baixar o estoque dos produtos;
+  4) calcular o valor total.
+
+Se qualquer etapa falhar no meio, o banco ficaria inconsistente
+(por exemplo, pedido criado sem baixa de estoque). A transação
+garante ATOMICIDADE: ou todas as operações são gravadas (COMMIT),
+ou nenhuma e (ROLLBACK).
+
+Pontos técnicos:
+- LAST_INSERT_ID() captura o id gerado pelo AUTO_INCREMENT do pedido
+  e o reaproveita nos itens.
+- O preço do item é lido da tabela Produto no momento da compra.
+- A baixa de estoque (estoque_atual - quantidade) é protegida pela
+  CHECK (estoque_atual >= 0): se faltar estoque, o UPDATE falha e a
+  transação pode ser desfeita.
+
+
+---------------------------------------------------------------------
+4. INSERT COM LAST_INSERT_ID() - NOVO CLIENTE (3.3)
+---------------------------------------------------------------------
+Comandos: INSERT em Pessoa; INSERT em Cliente com LAST_INSERT_ID()
+
+Motivo: o modelo usa herança. Um cliente e, ao mesmo tempo, uma
+Pessoa (dados comuns) e um Cliente (dados específicos). Por isso são
+necessários dois inserts: primeiro em Pessoa, depois em Cliente
+reutilizando o id gerado, já que id_cliente é PK e também FK de
+Pessoa. Ambos ficam dentro de uma transação para não existir uma
+Pessoa "orfã" caso o segundo insert falhe.
+
+
+---------------------------------------------------------------------
+5. UPDATE - AVANCO DE STATUS DO PEDIDO (3.4)
+---------------------------------------------------------------------
+Comando: UPDATE Pedido SET status_pedido = 'Enviado' WHERE
+         id_pedido = 4;
+
+Motivo: o pedido passa por um ciclo de vida (Pendente, Enviado,
+Entregue). Esse andamento e registrado alterando apenas a coluna de
+status, sem apagar e recriar o pedido, o que preserva o histórico e
+os itens vinculados.
+
+
+---------------------------------------------------------------------
+6. UPDATE COM JOIN - PONTOS DE FIDELIDADE (3.5)
+---------------------------------------------------------------------
+Comando: UPDATE Cliente c JOIN Pedido p ON ... SET
+         c.pontos_fidelidade = c.pontos_fidelidade +
+         FLOOR(p.valor_total / 10) WHERE p.id_pedido = ...
+
+Motivo: ao concluir um pedido, o cliente recebe 1 ponto a cada
+R$ 10,00 gastos. O JOIN permite usar o valor do pedido (tabela
+Pedido) para atualizar o cliente (tabela Cliente) em um único
+comando, sem calculo manual.
+
+Pontos técnicos:
+- A expressão pontos_fidelidade + ... acumula pontos, em vez de
+  sobrescrever o valor anterior.
+- FLOOR arredonda para baixo, de modo que só pontos inteiros sejam
+  creditados.
+- O filtro por id_pedido garante que cada pedido seja pontuado uma
+  única vez por execução.
+
+
+---------------------------------------------------------------------
+7. UPDATE EM LOTE - REAJUSTE DE PRECO POR CATEGORIA (3.6)
+---------------------------------------------------------------------
+Comando: UPDATE Produto SET preco = ROUND(preco * 1.05, 2) WHERE
+         id_categoria = 4;
+
+Motivo: aplicar o mesmo reajuste (5%) a todos os produtos de uma
+categoria (Smartphones) em um único comando, em vez de alterar
+produto por produto.
+
+Ponto importante: os pedidos antigos NÃO mudam de valor, porque
+Item_Pedido guarda o preço da época em preco_unitario_praticado.
+Esse é o motivo de essa coluna existir: o preço do catalogo muda, o
+preço já cobrado em uma venda não.
+
+
+---------------------------------------------------------------------
+8. UPDATE - CORRECAO CADASTRAL E AJUSTE DE RH (3.7)
+---------------------------------------------------------------------
+Comandos: UPDATE Pessoa SET telefone = ... WHERE id_pessoa = 6;
+          UPDATE Funcionario SET cargo = ..., salario = ... WHERE
+          id_funcionario = 9;
+
+Motivo: manutenção rotineira. Corrigir um telefone que estava nulo
+e registrar uma promoção com novo cargo e salário. Mostra também
+que é possível alterar varias colunas no mesmo UPDATE.
+
+
+---------------------------------------------------------------------
+9. DELETE COM CASCADE - REMOÇÃO DE PEDIDO CANCELADO (3.8)
+---------------------------------------------------------------------
+Comando: DELETE FROM Pedido WHERE id_pedido = 5 AND status_pedido =
+         'Cancelado';
+
+Motivo: demonstrar o ON DELETE CASCADE definido em Item_Pedido. Ao
+apagar o pedido, todos os seus itens são removidos automaticamente,
+sem precisar de um DELETE separado e sem deixar itens orfãos.
+
+Pontos técnicos:
+- A condição status_pedido = 'Cancelado' funciona como trava: o
+  comando não apaga o pedido se ele estiver em outro status.
+- Em um sistema real, pedidos cancelados normalmente são MANTIDOS
+  por razões de histórico e fiscais. O DELETE aqui tem finalidade
+  didática.
+
+
+---------------------------------------------------------------------
+10. DELETE EM HERANCA - REMOÇÃO DE FUNCIONÁRIO (3.9)
+---------------------------------------------------------------------
+Comandos: INSERT de Pessoa e Funcionario temporários; DELETE FROM
+          Pessoa WHERE id_pessoa = 99;
+
+Motivo: demonstrar que, ao apagar a Pessoa, a linha correspondente
+em Funcionário e removida por CASCADE. Os dados usados são um
+registro temporário, criado só para o teste, para que a tabela
+Funcionário não fique abaixo do mínimo de 5 registros.
+
+
+---------------------------------------------------------------------
+11. DELETE BLOQUEADO - TESTE DE INTEGRIDADE (3.10, COMENTADO)
+---------------------------------------------------------------------
+Comando: DELETE FROM Pessoa WHERE id_pessoa = 1;
+
+Motivo: mostrar a proteção da integridade referencial. O cliente 1
+possui pedidos, e a FK de Pedido para Cliente e RESTRICT. O banco
+recusa o comando com o erro 1451, impedindo a perda do histórico de
+vendas.
+
+O comando esta comentado no script porque gera erro de propósito.
+Descomente apenas para demonstrar o comportamento.
+
