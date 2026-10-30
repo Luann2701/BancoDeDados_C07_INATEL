@@ -4,6 +4,7 @@
 
 - Luann Aparecido De Almeida Rangel
 - Esthéfano Venícius Rosa
+- Guilherme Ferreira Silva
 
 ## Tema Escolhido
 
