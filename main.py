@@ -1,4 +1,3 @@
-"""Ponto de entrada: conecta ao banco e abre o menu principal."""
 from mysql.connector import Error
 
 import crud_categoria

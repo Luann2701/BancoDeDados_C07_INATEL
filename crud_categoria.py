@@ -1,4 +1,3 @@
-"""CRUD de Categoria - modelo para as demais entidades."""
 from db import consultar, executar
 from utils import confirmar, ler_int, ler_texto, mostrar_tabela, rodar_menu
 
