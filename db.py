@@ -1,5 +1,6 @@
 """Conexão com o MySQL e funções auxiliares de acesso ao banco."""
 import os
+from contextlib import contextmanager
 from getpass import getpass
 
 import mysql.connector
@@ -68,6 +69,26 @@ def executar(sql, params=()):
         cur.close()
 
 
+@contextmanager
+def transacao():
+    """Agrupa várias escritas: ou tudo é gravado (commit) ou nada é (rollback).
+
+    Uso:
+        with transacao() as cur:
+            cur.execute(...)
+            cur.execute(...)
+    """
+    cur = _conn.cursor()
+    try:
+        yield cur
+        _conn.commit()
+    except Exception:
+        _conn.rollback()
+        raise
+    finally:
+        cur.close()
+
+
 def mensagem_erro(err):
     """Traduz erros do MySQL (pelo número) para mensagens claras."""
     errno = getattr(err, "errno", None)
@@ -77,11 +98,8 @@ def mensagem_erro(err):
         2003: "Não foi possível alcançar o servidor MySQL (ele está ligado?).",
         1048: "Um campo obrigatório ficou vazio.",
         1062: "Valor duplicado: já existe um registro com esse valor único.",
-        # FK ao excluir/alterar o "pai": 1451 (root) ou 1217 (usuário comum,
-        # mesma falha com mensagem sem detalhes). Tratar os dois.
         1451: "Não é possível excluir/alterar: existem registros que dependem deste.",
         1217: "Não é possível excluir/alterar: existem registros que dependem deste.",
-        # FK ao inserir/alterar o "filho": 1452 (root) ou 1216 (usuário comum).
         1452: "Referência inválida: o registro relacionado não existe.",
         1216: "Referência inválida: o registro relacionado não existe.",
         3819: "O valor informado viola uma regra (CHECK) da tabela.",
