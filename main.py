@@ -2,9 +2,10 @@
 from mysql.connector import Error
 
 import crud_categoria
-import crud_cliente
-import crud_funcionario
+import crud_clientes
+import crud_funcionarios
 import crud_produto
+import crud_pedido
 from db import conectar, desconectar, mensagem_erro
 from utils import rodar_menu
 
@@ -23,11 +24,11 @@ def main():
     try:
         rodar_menu("LOJA VIRTUAL", {
             "1": ("Pessoas", em_desenvolvimento),
-            "2": ("Clientes", crud_cliente.menu),
-            "3": ("Funcionários", crud_funcionario.menu),
+            "2": ("Clientes", crud_clientes.menu),
+            "3": ("Funcionários", crud_funcionarios.menu),
             "4": ("Categorias", crud_categoria.menu),
             "5": ("Produtos", crud_produto.menu),
-            "6": ("Pedidos", em_desenvolvimento),
+            "6": ("Pedidos", crud_pedido.menu),
             "7": ("Itens de pedido", em_desenvolvimento),
             "8": ("Consultas com JOIN", em_desenvolvimento),
         }, rotulo_saida="Sair")
